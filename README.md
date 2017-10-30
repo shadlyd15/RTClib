@@ -1,5 +1,7 @@
 This is a fork of JeeLab's fantastic real time clock library for Arduino.
 
+Optimized for only DS3231. 
+
 For details on using this library with an RTC module like the DS1307, PCF8523, or DS3231, see the guide at: https://learn.adafruit.com/ds1307-real-time-clock-breakout-board-kit/overview
 
 To download. click the DOWNLOADS button to the right, and rename the uncompressed folder RTClib.
