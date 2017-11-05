@@ -65,6 +65,13 @@ bool RTC_DS3231::begin(void) {
   return false;
 }
 
+bool RTC_DS3231::end(void){
+	if ( Wire.endTransmission() == I2C_OK ) {
+    return true;  
+  }
+  return false;
+}
+
 bool RTC_DS3231::isActive(){
   Wire.beginTransmission(DS3231_ADDRESS);
   Wire._I2C_WRITE((byte)0);

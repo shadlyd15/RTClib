@@ -33,6 +33,7 @@ public:
     bool isActive();
     bool getTemperature(uint32_t * temperature);
     bool now(DateTime_t * DateTime);
+    bool end(void);
 private:
     uint8_t read_i2c_register(uint8_t addr, uint8_t reg);
     bool write_i2c_register(uint8_t addr, uint8_t reg, uint8_t val);
