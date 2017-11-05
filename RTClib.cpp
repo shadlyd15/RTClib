@@ -1,7 +1,7 @@
 // Code by JeeLabs http://news.jeelabs.org/code/
 // Released to the public domain! Enjoy!
 
-#include <Wire.h>
+#include <I2C.h>
 #include "RTClib.h"
 #ifdef __AVR__
  #include <avr/pgmspace.h>
@@ -30,22 +30,16 @@
 
 #define I2C_OK  (0)
 
- uint8_t RTC_DS3231::read_i2c_register(uint8_t addr, uint8_t reg) {
-  Wire.beginTransmission(addr);
-  Wire._I2C_WRITE((byte)reg);
-  Wire.endTransmission();
-  Wire.requestFrom(addr, (byte)1);
-  return Wire._I2C_READ();
-}
-
- bool RTC_DS3231::write_i2c_register(uint8_t addr, uint8_t reg, uint8_t val) {
-  Wire.beginTransmission(addr);
-  Wire._I2C_WRITE((byte)reg);
-  Wire._I2C_WRITE((byte)val);
-  if(Wire.endTransmission() == I2C_OK){
-    return true;
+int RTC_DS3231::read_i2c_register(uint8_t addr, uint8_t reg) {
+  if ( I2c.write(addr,reg) == I2C_OK ) {
+    return I2c.read(addr,reg,(uint8_t)1);
   }
-  return false;
+  else
+      return -1;
+}   
+
+bool RTC_DS3231::write_i2c_register(uint8_t addr, uint8_t reg, uint8_t val) {
+  return I2c.write(addr,reg,val);
 }
 
 
@@ -56,54 +50,63 @@ uint8_t RTC_DS3231::bin2bcd (uint8_t val) { return val + 6 * (val / 10); }
 // RTC_DS3231 implementation
 
 bool RTC_DS3231::begin(void) {
-  Wire.begin();
-  Wire.beginTransmission(DS3231_ADDRESS);
-  Wire._I2C_WRITE((byte)0);
-  if ( Wire.endTransmission() == I2C_OK ) {
+  I2c.timeOut(2000);
+  I2c.begin();
+  if ( I2c.write(DS3231_ADDRESS,0x00) == I2C_OK ) {
     return true;  
   }
   return false;
 }
 
-bool RTC_DS3231::end(void){
-	if ( Wire.endTransmission() == I2C_OK ) {
+void RTC_DS3231::end(void){
+	I2c.end();
+}
+
+bool RTC_DS3231::isActive(void){
+  if ( I2c.sendAddress(DS3231_ADDRESS) == I2C_OK ) {
     return true;  
   }
   return false;
 }
 
-bool RTC_DS3231::isActive(){
-  Wire.beginTransmission(DS3231_ADDRESS);
-  Wire._I2C_WRITE((byte)0);
-  if ( Wire.endTransmission() == I2C_OK ) {
+bool RTC_DS3231::restart(void){
+  I2c.end();
+  if ( this->begin() ) {
     return true;  
   }
   return false;
 }
+
+// bool RTC_DS3231::isActive(){
+//   Wire.beginTransmission(DS3231_ADDRESS);
+//   Wire._I2C_WRITE((byte)0);
+//   if ( Wire.endTransmission() == I2C_OK ) {
+//     return true;  
+//   }
+//   return false;
+// }
 
 bool RTC_DS3231::lostPower(void) {
-  Wire.beginTransmission((uint8_t)DS3231_ADDRESS);
-  Wire._I2C_WRITE((byte)DS3231_STATUSREG);
-  if ( Wire.endTransmission() == I2C_OK ) {
-    Wire.requestFrom((uint8_t)DS3231_ADDRESS, (byte)1);
-    return (Wire._I2C_READ() >> 7 );
+  if( I2c.read((uint8_t)DS3231_ADDRESS, (uint8_t)DS3231_STATUSREG, (uint8_t)1) == I2C_OK ){
+      return I2c.receive() >> 7;
   }
   return true;
 }
 
+void RTC_DS3231::scan(){
+  I2c.scan();
+}
+
 bool RTC_DS3231::now(DateTime_t * DateTime) {
-  Wire.beginTransmission(DS3231_ADDRESS);
-  Wire._I2C_WRITE((byte)0);	
-  if(Wire.endTransmission() == I2C_OK)
+  if(I2c.read((uint8_t)DS3231_ADDRESS, (uint8_t)0x00, (uint8_t)7) == I2C_OK)
   {
-    Wire.requestFrom(DS3231_ADDRESS, 7);
-    DateTime->second = bcd2bin(Wire._I2C_READ() & 0x7F);
-    DateTime->minute = bcd2bin(Wire._I2C_READ());
-    DateTime->hour = bcd2bin(Wire._I2C_READ());
-    Wire._I2C_READ();
-    DateTime->day = bcd2bin(Wire._I2C_READ());
-    DateTime->month = bcd2bin(Wire._I2C_READ());
-    DateTime->year = bcd2bin(Wire._I2C_READ()) + 2000;
+    DateTime->second = bcd2bin(I2c.receive() & 0x7F);
+    DateTime->minute = bcd2bin(I2c.receive());
+    DateTime->hour = bcd2bin(I2c.receive());
+    I2c.receive();
+    DateTime->day = bcd2bin(I2c.receive());
+    DateTime->month = bcd2bin(I2c.receive());
+    DateTime->year = bcd2bin(I2c.receive()) + 2000;
     return true;
   }
   return false;
@@ -145,21 +148,22 @@ bool RTC_DS3231::adjust(const __FlashStringHelper* date, const __FlashStringHelp
 }
 
 bool RTC_DS3231::adjust(const DateTime_t DataTime) {
-  Wire.beginTransmission(DS3231_ADDRESS);
-  Wire._I2C_WRITE((byte)0); // start at location 0
-  Wire._I2C_WRITE(bin2bcd(DataTime.second));
-  Wire._I2C_WRITE(bin2bcd(DataTime.minute));
-  Wire._I2C_WRITE(bin2bcd(DataTime.hour));
-  Wire._I2C_WRITE(bin2bcd(0));
-  Wire._I2C_WRITE(bin2bcd(DataTime.day));
-  Wire._I2C_WRITE(bin2bcd(DataTime.month));
-  Wire._I2C_WRITE(bin2bcd(DataTime.year - 2000));
-  Wire.endTransmission();
 
-  uint8_t statreg = read_i2c_register(DS3231_ADDRESS, DS3231_STATUSREG);
-  statreg &= ~0x80; // flip OSF bit
-  if( write_i2c_register(DS3231_ADDRESS, DS3231_STATUSREG, statreg) == I2C_OK ){
-    return true;
+  I2c.write((uint8_t)DS3231_ADDRESS,(uint8_t)0x00,bin2bcd(DataTime.second)); 
+  I2c.write((uint8_t)DS3231_ADDRESS,(uint8_t)0x01,bin2bcd(DataTime.minute));
+  I2c.write((uint8_t)DS3231_ADDRESS,(uint8_t)0x02,bin2bcd(DataTime.hour));
+  I2c.write((uint8_t)DS3231_ADDRESS,(uint8_t)0x03,bin2bcd(0));
+  I2c.write((uint8_t)DS3231_ADDRESS,(uint8_t)0x04,bin2bcd(DataTime.day));
+  I2c.write((uint8_t)DS3231_ADDRESS,(uint8_t)0x05,bin2bcd(DataTime.month));
+  I2c.write((uint8_t)DS3231_ADDRESS,(uint8_t)0x06,bin2bcd(DataTime.year - 2000));
+
+  int statreg = read_i2c_register(DS3231_ADDRESS, DS3231_STATUSREG);
+  if(statreg > -1){
+    uint8_t statusreg = 0;
+    statusreg &= ~0x80; // flip OSF bit
+    if( write_i2c_register(DS3231_ADDRESS, DS3231_STATUSREG, statusreg) == I2C_OK ){
+      return true;
+    }
   }
   return false;
 }
@@ -169,12 +173,9 @@ bool RTC_DS3231::getTemperature(uint32_t * temperature)
     uint8_t temp_msb, temp_lsb;
     int8_t nint;
 
-    Wire.beginTransmission(DS3231_ADDRESS);
-    Wire.write(DS3231_TEMPERATURE_ADDR);
-    if(Wire.endTransmission() == I2C_OK){
-      Wire.requestFrom(DS3231_ADDRESS, 2);
-      temp_msb = Wire.read();
-      temp_lsb = Wire.read() >> 6;
+    if( I2c.read(DS3231_ADDRESS, DS3231_TEMPERATURE_ADDR, 2) == I2C_OK ){
+      temp_msb = I2c.receive();
+      temp_lsb = I2c.receive() >> 6;
 
       if ((temp_msb & 0x80) != 0)
           nint = temp_msb | ~((1 << 8) - 1);      // if negative get two's complement
@@ -184,7 +185,7 @@ bool RTC_DS3231::getTemperature(uint32_t * temperature)
       *temperature == (0.25 * temp_lsb + nint) * 100;
       return true;
     }
-    return false;
+    return false; 
 }
 
 // Ds3231SqwPinMode RTC_DS3231::readSqwPinMode() {

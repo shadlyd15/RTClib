@@ -30,12 +30,14 @@ public:
     bool adjust(const DateTime_t DataTime);
     bool adjust(const __FlashStringHelper* date, const __FlashStringHelper* time);
     bool lostPower(void);
-    bool isActive();
     bool getTemperature(uint32_t * temperature);
     bool now(DateTime_t * DateTime);
-    bool end(void);
+    void end(void);
+    void scan(void);
+    bool isActive(void);
+    bool restart(void);
 private:
-    uint8_t read_i2c_register(uint8_t addr, uint8_t reg);
+    int read_i2c_register(uint8_t addr, uint8_t reg);
     bool write_i2c_register(uint8_t addr, uint8_t reg, uint8_t val);
     uint8_t bcd2bin (uint8_t val);
     uint8_t bin2bcd (uint8_t val);
